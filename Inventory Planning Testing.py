@@ -6,19 +6,19 @@ from datetime import datetime, timedelta
 # -----------------------------
 # Helper Functions
 # -----------------------------
-def calculate_average_daily_demand(sales_df, days=30):
+def calculate_total_quantity_sold(sales_df, days=30):
     """
-    Calculate Average Daily Demand (ADD) based on last 'days' of sales.
+    Calculate total Quantity Sold for the last 'days'.
     """
     recent_sales = sales_df[sales_df['Date'] >= (datetime.today() - timedelta(days=days))]
-    avg_daily_demand = recent_sales.groupby('SKU')['Quantity_Sold'].sum() / days
-    return avg_daily_demand
+    total_quantity_sold = recent_sales.groupby('SKU')['Quantity_Sold'].sum()
+    return total_quantity_sold
 
-def calculate_reorder_point(avg_daily_demand, lead_time, safety_stock):
+def calculate_reorder_point(total_quantity_sold, lead_time, safety_stock):
     """
     Calculate Reorder Point (ROP).
     """
-    return (avg_daily_demand * lead_time) + safety_stock
+    return (total_quantity_sold * lead_time) + safety_stock
 
 # -----------------------------
 # Streamlit App
@@ -47,24 +47,29 @@ if sales_file and inventory_file:
     # Convert Date column to datetime
     sales_df['Date'] = pd.to_datetime(sales_df['Date'])
 
-    # Calculate ADD for each SKU
-    avg_daily_demand = calculate_average_daily_demand(sales_df)
+    # Calculate total quantity sold for each SKU
+    total_quantity_sold = calculate_total_quantity_sold(sales_df)
     
     # Merge with inventory
-    merged_df = inventory_df.merge(avg_daily_demand, on='SKU', how='left')
-    merged_df.rename(columns={0: 'Average_Daily_Demand'}, inplace=True)
+    merged_df = inventory_df.merge(total_quantity_sold, on='SKU', how='left')
+    merged_df.rename(columns={'Quantity_Sold': 'Total_Quantity_Sold'}, inplace=True)
 
     # Calculate ROP
     merged_df['ROP'] = merged_df.apply(
-        lambda row: calculate_reorder_point(row['Quantity_Sold'], row['Lead_Time'], row['Safety_Stock']), axis=1
+        lambda row: calculate_reorder_point(row['Total_Quantity_Sold'], row['Lead_Time'], row['Safety_Stock']),
+        axis=1
     )
 
     # Days of Inventory Remaining
-    merged_df['Days_Inventory_Left'] = merged_df['Current_Stock'] / merged_df['Quantity_Sold']
+    merged_df['Days_Inventory_Left'] = merged_df['Current_Stock'] / merged_df['Total_Quantity_Sold']
 
     # Show table
     st.subheader("📋 Inventory Summary")
-    st.dataframe(merged_df.style.format({"Average_Daily_Demand": "{:.2f}", "ROP": "{:.2f}", "Days_Inventory_Left": "{:.1f}"}))
+    st.dataframe(merged_df.style.format({
+        "Total_Quantity_Sold": "{:.0f}",
+        "ROP": "{:.2f}",
+        "Days_Inventory_Left": "{:.1f}"
+    }))
 
     # Visualization - Current Stock vs ROP
     st.subheader("📊 Stock vs Reorder Point")
