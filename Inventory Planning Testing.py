@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
+import zipfile
 import os
+import tempfile
 
 # -----------------------------
 # Helper Functions
@@ -15,6 +17,35 @@ def load_file(file):
     else:
         st.error("Unsupported file type. Please upload CSV or Excel files only.")
         return None
+
+# Load orders from CSV, Excel, or ZIP containing multiple files
+def load_orders_file(uploaded_file):
+    temp_dir = tempfile.mkdtemp()
+    all_orders = []
+
+    # If ZIP file
+    if uploaded_file.name.endswith('.zip'):
+        with zipfile.ZipFile(uploaded_file, 'r') as zip_ref:
+            zip_ref.extractall(temp_dir)
+            for extracted_file in os.listdir(temp_dir):
+                file_path = os.path.join(temp_dir, extracted_file)
+                if extracted_file.endswith('.csv'):
+                    all_orders.append(pd.read_csv(file_path))
+                elif extracted_file.endswith('.xlsx'):
+                    all_orders.append(pd.read_excel(file_path))
+    
+    # If CSV or Excel
+    elif uploaded_file.name.endswith('.csv'):
+        all_orders.append(pd.read_csv(uploaded_file))
+    elif uploaded_file.name.endswith('.xlsx'):
+        all_orders.append(pd.read_excel(uploaded_file))
+    else:
+        st.error("Unsupported orders file type. Please upload CSV, Excel, or ZIP.")
+
+    # Combine all dataframes into one
+    if all_orders:
+        return pd.concat(all_orders, ignore_index=True)
+    return None
 
 def calculate_add(sales_df, days=30):
     recent_sales = sales_df[sales_df['Order_Date'] >= (datetime.today() - timedelta(days=days))]
@@ -33,18 +64,13 @@ st.title("📦 Inventory Planning Dashboard")
 
 # Sidebar Uploads
 st.sidebar.header("Upload Your Data")
-orders_file = st.sidebar.file_uploader("Upload Orders CSV or Excel", type=["csv", "xlsx"])
+orders_file = st.sidebar.file_uploader("Upload Orders (CSV, Excel, or ZIP)", type=["csv", "xlsx", "zip"])
 current_stock_file = st.sidebar.file_uploader("Upload Current Stock CSV or Excel", type=["csv", "xlsx"])
 product_master_file = st.sidebar.file_uploader("Upload Product Master CSV or Excel", type=["csv", "xlsx"])
 
 if orders_file and current_stock_file and product_master_file:
-    # Display file names for debugging
-    st.write("Uploaded Orders File:", orders_file.name)
-    st.write("Uploaded Current Stock File:", current_stock_file.name)
-    st.write("Uploaded Product Master File:", product_master_file.name)
-
-    # Load data using flexible loader
-    orders = load_file(orders_file)
+    # Load data
+    orders = load_orders_file(orders_file)
     current_stock = load_file(current_stock_file)
     product_master = load_file(product_master_file)
 
