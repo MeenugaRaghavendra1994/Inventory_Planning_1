@@ -49,8 +49,24 @@ if orders_file and current_stock_file and product_master_file:
     product_master = load_file(product_master_file)
 
     if orders is not None and current_stock is not None and product_master is not None:
-        # Ensure correct date format
-        orders['Order_Date'] = pd.to_datetime(orders['Order_Date'])
+        # Debug: Show columns
+        st.write("Orders File Columns:", orders.columns.tolist())
+
+        # Automatically detect the date column
+        date_column = None
+        for col in orders.columns:
+            if "date" in col.lower():
+                date_column = col
+                break
+
+        if date_column:
+            orders[date_column] = pd.to_datetime(orders[date_column])
+        else:
+            st.error("No date column found in the orders file. Please ensure there is a column containing 'date'.")
+            st.stop()
+
+        # Standardize column name to 'Order_Date'
+        orders.rename(columns={date_column: 'Order_Date'}, inplace=True)
 
         # Calculate ADD
         add_series = calculate_add(orders)
